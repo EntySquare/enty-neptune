@@ -7,7 +7,7 @@ use crate::{Arity, BatchHasher, Strength, DEFAULT_STRENGTH};
 use blstrs::Scalar as Fr;
 use ff::{Field, PrimeField};
 use generic_array::{typenum, ArrayLength, GenericArray};
-use log::info;
+use log::{info,debug};
 use rust_gpu_tools::{program_closures, Device, Program};
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -18,6 +18,7 @@ use rust_gpu_tools::cuda;
 #[cfg(feature = "opencl")]
 use rust_gpu_tools::opencl;
 use std::ffi::c_void;
+use std::time::Instant;
 
 #[derive(Debug)]
 enum Buffer<T> {
@@ -155,6 +156,7 @@ where
         let max_batch_size = self.max_batch_size;
         let batch_size = preimages.len();
         assert!(batch_size <= max_batch_size);
+        debug!("local_work_size:{},max_batch_size:{},batch_size:{}",local_work_size,max_batch_size,batch_size);
 
         let global_work_size = calc_global_work_size(batch_size, local_work_size);
         let num_hashes = preimages.len();
@@ -190,7 +192,8 @@ where
             (36, Strength::Strengthened) => "hash_preimages_36_strengthened",
             (arity, strength) => return Err(Error::GpuError(format!("No kernel for arity {} and strength {:?} available. Try to enable the `arity{}` feature flag.", arity, strength, arity))),
         };
-
+        let now= Instant::now();
+        debug!("hash start...");
         let closures = program_closures!(|program, _args| -> Result<Vec<Fr>, Error> {
             let kernel = program.create_kernel(kernel_name, global_work_size, local_work_size)?;
             let preimages_buffer = program.create_buffer_from_slice(&preimages)?;
@@ -209,6 +212,7 @@ where
         });
 
         let results = self.program.run(closures, ())?;
+        debug!("hash end cost:{:?}",now.elapsed());
         Ok(results)
     }
 
