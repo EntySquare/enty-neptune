@@ -192,6 +192,7 @@ where
             (36, Strength::Strengthened) => "hash_preimages_36_strengthened",
             (arity, strength) => return Err(Error::GpuError(format!("No kernel for arity {} and strength {:?} available. Try to enable the `arity{}` feature flag.", arity, strength, arity))),
         };
+        debug!("global_work_size:{},num_hashes:{},kernel_name:{}",global_work_size,num_hashes,kernel_name);
         let now= Instant::now();
         debug!("hash start...");
         let closures = program_closures!(|program, _args| -> Result<Vec<Fr>, Error> {
