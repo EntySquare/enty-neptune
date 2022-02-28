@@ -1,18 +1,14 @@
-use std::time::Instant;
-
-use blstrs::Scalar as Fr;
-use ff::Field;
-use generic_array::GenericArray;
-use log::debug;
-
-use crate::{Arity, BatchHasher};
 use crate::batch_hasher::Batcher;
 use crate::error::Error;
 use crate::poseidon::{Poseidon, PoseidonConstants};
+use crate::{Arity, BatchHasher};
+use blstrs::Scalar as Fr;
+use ff::Field;
+use generic_array::GenericArray;
 
 pub trait TreeBuilderTrait<TreeArity>
-    where
-        TreeArity: Arity<Fr>,
+where
+    TreeArity: Arity<Fr>,
 {
     fn add_leaves(&mut self, leaves: &[Fr]) -> Result<(), Error>;
     fn add_final_leaves(&mut self, leaves: &[Fr]) -> Result<(Vec<Fr>, Vec<Fr>), Error>;
@@ -21,8 +17,8 @@ pub trait TreeBuilderTrait<TreeArity>
 }
 
 pub struct TreeBuilder<TreeArity>
-    where
-        TreeArity: Arity<Fr>,
+where
+    TreeArity: Arity<Fr>,
 {
     pub leaf_count: usize,
     data: Vec<Fr>,
@@ -34,8 +30,8 @@ pub struct TreeBuilder<TreeArity>
 }
 
 impl<TreeArity> TreeBuilderTrait<TreeArity> for TreeBuilder<TreeArity>
-    where
-        TreeArity: Arity<Fr>,
+where
+    TreeArity: Arity<Fr>,
 {
     fn add_leaves(&mut self, leaves: &[Fr]) -> Result<(), Error> {
         let start = self.fill_index;
@@ -86,8 +82,8 @@ fn as_generic_arrays<A: Arity<Fr>>(vec: &[Fr]) -> &[GenericArray<Fr, A>] {
 }
 
 impl<TreeArity> TreeBuilder<TreeArity>
-    where
-        TreeArity: Arity<Fr>,
+where
+    TreeArity: Arity<Fr>,
 {
     pub fn new(
         tree_batcher: Option<Batcher<TreeArity>>,
@@ -117,9 +113,6 @@ impl<TreeArity> TreeBuilder<TreeArity>
         let final_tree_size = self.tree_size(rows_to_discard);
         let intermediate_tree_size = self.tree_size(0) + self.leaf_count;
         let arity = TreeArity::to_usize();
-        let now = Instant::now();
-        debug!("build_tree start...");
-        debug!("final_tree_size:{}, intermediate_tree_size:{},arity:{}", final_tree_size, intermediate_tree_size, arity);
 
         let mut tree_data = vec![Fr::zero(); intermediate_tree_size];
 
@@ -130,14 +123,14 @@ impl<TreeArity> TreeBuilder<TreeArity>
         match &mut self.tree_batcher {
             Some(batcher) => {
                 let max_batch_size = batcher.max_batch_size();
-                debug!("max_batch_size:{}", max_batch_size);
+
                 let (mut row_start, mut row_end) = (0, self.leaf_count);
                 while row_end < intermediate_tree_size {
                     let row_size = row_end - row_start;
                     assert_eq!(0, row_size % arity);
                     let new_row_size = row_size / arity;
                     let (new_row_start, new_row_end) = (row_end, row_end + new_row_size);
-                    debug!("new_row_start:{},new_row_end:{},new_row_size:{},", new_row_start, new_row_end, new_row_size);
+
                     let mut total_hashed = 0;
                     let mut batch_start = row_start;
                     while total_hashed < new_row_size {
@@ -145,13 +138,10 @@ impl<TreeArity> TreeBuilder<TreeArity>
                         let batch_size = (batch_end - batch_start) / arity;
                         let preimages =
                             as_generic_arrays::<TreeArity>(&tree_data[batch_start..batch_end]);
-                        debug!(" batch_start:{},batch_end:{},batch_size:{},", batch_start, batch_end, batch_size);
-                        let par = Instant::now();
-                        debug!(" batcher.hash start...");
                         let hashed = batcher.hash(&preimages)?;
-                        debug!(" batcher.hash end cost:{:?}", par.elapsed());
+
                         #[allow(clippy::drop_ref)]
-                            drop(preimages); // make sure we don't reference tree_data anymore
+                        drop(preimages); // make sure we don't reference tree_data anymore
                         tree_data[new_row_start + total_hashed
                             ..new_row_start + total_hashed + hashed.len()]
                             .copy_from_slice(&hashed);
@@ -176,7 +166,6 @@ impl<TreeArity> TreeBuilder<TreeArity>
 
         let base_row = tree_data[..self.leaf_count].to_vec();
         let tree_to_keep = tree_data[tree_data.len() - final_tree_size..].to_vec();
-        debug!("build_tree end cost:{:?}", now.elapsed());
         Ok((base_row, tree_to_keep))
     }
 
@@ -252,16 +241,15 @@ impl<TreeArity> TreeBuilder<TreeArity>
 }
 
 #[cfg(all(
-any(feature = "futhark", feature = "cuda", feature = "opencl"),
-not(target_os = "macos")
+    any(feature = "futhark", feature = "cuda", feature = "opencl"),
+    not(target_os = "macos")
 ))]
 #[cfg(test)]
 mod tests {
+    use super::*;
     use blstrs::Scalar as Fr;
     use ff::Field;
     use generic_array::typenum::U8;
-
-    use super::*;
 
     enum BatcherType {
         None,
